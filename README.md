@@ -7,7 +7,7 @@ A free practice site for the 15-minute opening range breakout with same-day (0DT
 ## What's inside
 - **Quick Read:** look at the first 15 minutes and call the morning: call, put or no trade.
 - **Full Trade:** play the morning forward, pick a strike from a live option chain, set stops and targets, scale out.
-- **Chart School:** 10-question drills on reading candles, levels, indicators and setups, in three levels.
+- **Chart Reps:** 10-question drills on reading candles, levels, indicators, setups and chart patterns, in six levels.
 - **Lessons:** the opening range, confirmation closes, VWAP, traps, sweeps, gaps, timing, exits and chop.
 - **Odds coach:** after every round, statistics from 30,000 simulated mornings, quoted only where they agree with real market days.
 
