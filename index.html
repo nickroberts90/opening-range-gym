@@ -75,6 +75,8 @@ select,input[type=number],input[type=text]{border:1px solid var(--line);backgrou
 .legend span::before,.legend .lg::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle;background:var(--c)}
 .legend .lg{font:inherit;color:inherit;background:none;border:0;padding:2px 0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .legend .lg:hover{color:var(--ink)}
+.peek{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;border:1px dashed var(--line);border-radius:10px;padding:8px 10px}
+.peek small{display:block;color:var(--muted);font-size:12px}.peek b{font-family:var(--mono)}
 .ltabs{display:flex;gap:6px;overflow-x:auto;margin:14px 0 16px;padding-bottom:4px;scrollbar-width:thin}
 .ltabs button{flex:none;font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
 .ltabs button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -202,7 +204,7 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
 
 <header>
   <div class="bar">
-    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v4.0</span></div>
+    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v4.1</span></div>
     <nav aria-label="Sections">
       <button id="nav-train" data-view="train" aria-current="page">Train</button>
       <button id="nav-lessons" data-view="lessons">Lessons</button>
@@ -1103,7 +1105,7 @@ function newDay(tag){
   stopPlay();
   if(tag&&G.mode==="school"){G.mode="quick";syncMode()}
   if(G.mode==="school"){schoolSetup();return}const pick=pickDay($("pick-ticker").value,tag||null);if(!pick){toast("No day matches that pattern for this ticker.");return}
-  G.practiceTag=tag||null;G.day=pick.sim?(pick.day||simDayOf(pick.s,pick.seed)):dayOf(pick.s,pick.i);G.cur=I945;G.phase="decide";G.choice=null;G.quick=null;G.trades=[];G.open=null;G.reviewAll=false;G.v6=null;
+  G.peeks=0;G.practiceTag=tag||null;G.day=pick.sim?(pick.day||simDayOf(pick.s,pick.seed)):dayOf(pick.s,pick.i);G.cur=I945;G.phase="decide";G.choice=null;G.quick=null;G.trades=[];G.open=null;G.reviewAll=false;G.v6=null;
   G.revealed=false;$("c-sym").textContent=shownSym(G.day);
   const hidden=G.day.sim?"simulated":hideSym(G.day)?"ticker and date hidden until the review":"date hidden until the review";
   $("c-date").textContent=tag?`Practice: ${TAG_LABEL[tag]||tag} · ${hidden}`:G.day.sim?SIM_META.label[G.day.sym]+" · simulated":hidden[0].toUpperCase()+hidden.slice(1);
@@ -1235,8 +1237,14 @@ function renderTicket(){
   return fullTicket(t);
 }
 function quickTicket(t){
-  t.append(el("div",{class:"eyebrow",text:"Quick Read · 9:45"}),el("h3",{text:"Where does the morning go?"}));
-  t.append(el("p",{class:"hint",style:"margin:4px 0 0",text:"Pick the side whose option you would buy right now. No trade means you expect chop: neither side gets to +25% before dropping 25%."}));
+  const pk=G.peeks||0,dec=G.phase==="decide";
+  t.append(el("div",{class:"eyebrow",text:"Quick Read · "+clk(barClose(G.phase==="decide"?G.cur:I945))}),el("h3",{text:"Where does the morning go?"}));
+  t.append(el("p",{class:"hint",style:"margin:4px 0 0",text:"Pick the side whose option you would buy at 9:45. No trade means you expect chop: neither side gets to +25% before dropping 25%."}));
+  if(dec){const mx=quickMaxXP(),now=Math.round(mx*quickMult(pk)),nxt=Math.round(mx*quickMult(pk+1));
+    t.append(el("div",{class:"peek"},el("div",{},el("small",{text:"XP available"}),el("b",{id:"q-xp",text:`${now} of ${mx}`})),
+      el("button",{class:"btn sm",id:"q-peek",disabled:pk>=QUICK_PEEK_MAX?"":null,title:"Show the next 5-minute candle. Your call is still graded on the 9:45 price.",onclick:quickPeek},
+        pk>=QUICK_PEEK_MAX?"No more peeks":`+5 min (XP → ${nxt})`)),
+      el("p",{class:"hint",style:"margin:6px 0 0",text:pk?`You've watched ${pk*5} more minutes. Your call is still graded on the 9:45 price, so later candles help you read the chart but cost XP.`:`Not sure yet? Each +5 min shows one more candle and cuts this round's XP by ${Math.round(QUICK_PEEK_COST*100)}% (up to ${QUICK_PEEK_MAX} peeks).`}))}
   const dis=G.phase!=="decide";const c=el("div",{class:"choices"},
     el("button",{class:"btn call",id:"q-call",text:"Call",onclick:()=>quickPick("CALL")}),
     el("button",{class:"btn put",id:"q-put",text:"Put",onclick:()=>quickPick("PUT")}),
@@ -1430,6 +1438,11 @@ document.addEventListener("keydown",e=>{
 });
 
 // ---------------------------------------------------------------- Quick Read flow
+// +5 min peeks: watch more candles before calling; each one cuts the round's XP. The call is still graded on 9:45.
+const QUICK_PEEK_MAX=4,QUICK_PEEK_COST=0.2;
+const quickMult=n=>Math.max(0,1-QUICK_PEEK_COST*n);
+function quickMaxXP(){const st=Store.player?Store.player.quick.streak:0;return 10+Math.min(10,2*st)}
+function quickPeek(){if(G.phase!=="decide"||(G.peeks||0)>=QUICK_PEEK_MAX)return;G.peeks=(G.peeks||0)+1;G.cur=I945+G.peeks;renderFacts();drawChart();renderTicket();$("q-peek")?.focus()}
 function quickPick(choice){
   if(G.phase!=="decide")return;G.choice=choice;G.phase="reveal";G.quick=quickAnswer(G.day);renderTicket();
   let i=G.cur;const t=setInterval(()=>{i++;G.cur=i;renderFacts();drawChart();if(i>=I1130){clearInterval(t);G.reviewAll=true;finishQuick()}},window.matchMedia("(prefers-reduced-motion: reduce)").matches?0:70);
@@ -1438,9 +1451,10 @@ function finishQuick(){
   const d=G.day,q=G.quick,right=G.choice===q.ans;G.phase="review";G.v6=simulateV6(d);reveal();
   const p=Store.player;p.quick.n++;p.rounds++;
   let xp=0;if(right){p.quick.right++;p.quick.streak++;p.quick.best=Math.max(p.quick.best,p.quick.streak);xp=(q.ans==="NO TRADE"?8:10)+Math.min(10,2*(p.quick.streak-1));if(q.ans==="NO TRADE")p.quick.noTrade++}else{p.quick.streak=0;xp=2}
+  const peeks=G.peeks||0;xp=Math.round(xp*quickMult(peeks));
   bumpTicker(d.sym,{quickN:1,quickRight:right?1:0});
   const tags=tagsOf(d);
-  const round={id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:Date.now(),mode:"quick",sym:d.sym,date:d.date,choice:G.choice,answer:q.ans,right,xp,v6:G.v6.pnl,tags,gap:+d.gap.toFixed(2)};
+  const round={id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:Date.now(),mode:"quick",sym:d.sym,date:d.date,choice:G.choice,answer:q.ans,right,xp,peeks,v6:G.v6.pnl,tags,gap:+d.gap.toFixed(2)};
   awardXP(xp,round);renderAll();renderQuickReview(round);
 }
 function quickNotes(d){
@@ -1458,7 +1472,7 @@ function renderQuickReview(round){
   const box=el("div",{class:"result"});
   box.append(el("div",{class:"eyebrow",text:"Review"}),revealLine(d),
     el("div",{class:"verdict "+(round.right?"pos":"neg"),text:round.right?"Right read":"Missed it"}),
-    el("p",{style:"margin:2px 0 0",text:`You said ${round.choice}. The answer was ${q.ans}. +${round.xp} XP`}));
+    el("p",{style:"margin:2px 0 0",text:`You said ${round.choice}. The answer was ${q.ans}. +${round.xp} XP`+(round.peeks?` (watched to ${clk(barClose(I945+round.peeks))}: ${round.peeks} peek${round.peeks>1?"s":""}, ${Math.round(quickMult(round.peeks)*100)}% of the XP)`:"")}));
   const fmtHit=s=>s.out==="W"?"+25% at "+clk(barClose(s.at)):s.out==="L"?"−25% first, "+clk(barClose(s.at)):"neither by 11:30";
   box.append(el("div",{class:"cmp"},
     el("div",{},el("small",{text:"Call "+q.res.CALL.K}),el("b",{text:fmtHit(q.res.CALL),style:"font-size:14px"})),
@@ -1475,7 +1489,7 @@ function renderQuickReview(round){
   box.append(ul,cb);box.append(coachBlock(round,{notes:quickNotes(d).map(n=>n.t),story:dayStory(d),odds:cq?cq.facts:null}));r.append(box);
 }
 
-function tradeSameDay(){const d=G.day;if(!d)return;stopPlay();G.mode="full";syncMode();
+function tradeSameDay(){const d=G.day;if(!d)return;stopPlay();G.peeks=0;G.mode="full";syncMode();
   G.cur=I945;G.phase="decide";G.choice=null;G.quick=null;G.trades=[];G.open=null;G.reviewAll=false;G.v6=null;G.sq=null;
   $("c-sym").textContent=d.sym;$("c-date").textContent=(d.sim?`${SIM_META.label[d.sym]} · simulated day #${d.seed}`:dateLabel(d))+" · same morning";
   $("review").replaceChildren();renderAll();window.scrollTo(0,0)}
@@ -1960,7 +1974,7 @@ document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()
 function syncMode(){$("mode-quick").setAttribute("aria-pressed",String(G.mode==="quick"));$("mode-full").setAttribute("aria-pressed",String(G.mode==="full"));
   const sch=G.mode==="school";$("mode-school").setAttribute("aria-pressed",String(sch));$("mk-real").disabled=sch;for(const id of ["pick-overlay","pick-panel"]){$(id).disabled=sch;$(id).title=sch?"Chart Reps shows the study each question needs":""}$("mk-real").title=sch?"Chart Reps uses simulated charts only":"";
   $("new-day").textContent=sch?"New round":"New day";if(!sch)G.sq=null;
-  $("mode-hint").textContent=sch?"Chart Reps: 10 quick questions on simulated charts. Each one freezes the chart at one moment and asks what you see. Score 8 or more to unlock the next level.":G.mode==="quick"?"Quick Read: look at the first 15 minutes and call the morning. Call, put, or no trade. Graded by whether a 9:45 ATM option hits +25% before −25% by 11:30."
+  $("mode-hint").textContent=sch?"Chart Reps: 10 quick questions on simulated charts. Each one freezes the chart at one moment and asks what you see. Score 8 or more to unlock the next level.":G.mode==="quick"?"Quick Read: look at the first 15 minutes and call the morning. Call, put, or no trade. Graded by whether a 9:45 ATM option hits +25% before −25% by 11:30. +5 min shows one more candle before you call, for less XP."
   :(G.market==="sim"?"Full Trade on a simulated market: candles play forward from 9:45. Pick any strike from the chain, set a stop and target, scale out, or sit out. In the simulation the option prices are the market, so every fill and P&L is exact."
    :"Full Trade: candles play forward from 9:45. Buy, set a stop and target, scale out, or sit out. Option prices are estimated; stock moves are real.")}
 $("mode-quick").addEventListener("click",()=>{if(G.mode==="quick")return;G.mode="quick";syncMode();newDay(G.practiceTag)});
