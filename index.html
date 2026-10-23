@@ -204,7 +204,7 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
 
 <header>
   <div class="bar">
-    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v4.1</span></div>
+    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v4.2</span></div>
     <nav aria-label="Sections">
       <button id="nav-train" data-view="train" aria-current="page">Train</button>
       <button id="nav-lessons" data-view="lessons">Lessons</button>
@@ -1323,7 +1323,7 @@ function fullTicket(t){
   }
 }
 function applyOrders(){const o=G.open;if(!o)return;const s=parseFloat($("tk-stop").value),g=parseFloat($("tk-tgt").value);o.stop=isFinite(s)&&s>0?s:null;o.target=isFinite(g)&&g>0?g:null;o.tq=+$("tk-tq").value||o.left;
-  if(o.stop!=null)o.everStop=true;toast("Orders set"+(o.stop?` · stop ${fmtP(o.stop)}`:"")+(o.target?` · sell ${o.tq} at ${fmtP(o.target)}`:""));renderTicket()}
+  if(o.stop!=null)o.everStop=true;if(o.firstStop==null&&o.stop!=null)o.firstStop=o.stop;if(o.firstTarget==null&&o.target!=null)o.firstTarget=o.target;toast("Orders set"+(o.stop?` · stop ${fmtP(o.stop)}`:"")+(o.target?` · sell ${o.tq} at ${fmtP(o.target)}`:""));renderTicket()}
 function buy(K,tag,ask){const sel=G.ticketSel,d=G.day;
   const tr={dir:sel.dir,K,tag,qty:sel.qty,left:sel.qty,entry:ask,entryIdx:G.cur,exits:[],realized:0,stop:null,target:null,tq:sel.qty,everStop:false,snap:snapAt(d,G.cur,sel.dir)};
   G.trades.push(tr);G.open=tr;renderTicket();drawChart();}
@@ -1457,6 +1457,25 @@ function finishQuick(){
   const round={id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:Date.now(),mode:"quick",sym:d.sym,date:d.date,choice:G.choice,answer:q.ans,right,xp,peeks,v6:G.v6.pnl,tags,gap:+d.gap.toFixed(2)};
   awardXP(xp,round);renderAll();renderQuickReview(round);
 }
+// Auto-sell and full day: when a stop or target on this option would have sold (first one touched, stop first if both
+// fall in the same candle, the same rule v6 uses), and what holding with no auto-sell to the 3:55 close would have been worth.
+function playOut(d,i,K,call,ask,stop,tgt){
+  let hit=null,best={v:ask,j:i},worst={v:ask,j:i};
+  for(let j=i+1;j<=LAST;j++){const r=optRange(d,j,K,call);
+    if(r.hi>best.v)best={v:r.hi,j};if(r.lo<worst.v)worst={v:r.lo,j};
+    if(!hit){if(stop!=null&&r.lo<=stop)hit={kind:"stop",j,price:stop};else if(tgt!=null&&r.hi>=tgt)hit={kind:"target",j,price:tgt}}}
+  const close=bidOf(d,d.bars[LAST].c,K,call,barClose(LAST)-1);
+  return {hit,close,best,worst};
+}
+const pctOf=(v,a)=>(v>=a?"+":"−")+Math.abs(Math.round((v-a)/a*100))+"%";
+function playOutLines(d,i,K,call,ask,stop,tgt,qty,label){
+  const P=playOut(d,i,K,call,ask,stop,tgt),q=qty||1,usd=v=>fmt$(Math.round((v-ask)*100*q)),at=j=>clk(barClose(j));
+  const auto=stop==null&&tgt==null?"No stop or target was set, so nothing would have sold automatically."
+    :P.hit?`The ${P.hit.kind} (${fmtP(P.hit.price)}) would have sold it at ${at(P.hit.j)}: ${usd(P.hit.price)} (${pctOf(P.hit.price,ask)}).`
+    :`Neither the stop${stop!=null?" ("+fmtP(stop)+")":""} nor the target${tgt!=null?" ("+fmtP(tgt)+")":""} was touched all day.`;
+  return {c:P.hit?(P.hit.kind==="target"?"good":"bad"):"info",l:"rk-exits",
+    t:`${label} ${auto} Held to the 4:00 close with no auto-sell: ${fmtP(P.close)}, ${usd(P.close)} (${pctOf(P.close,ask)}). Best ${fmtP(P.best.v)} at ${at(P.best.j)}, worst ${fmtP(P.worst.v)} at ${at(P.worst.j)}.`};
+}
 function quickNotes(d){
   const i=I945,b=d.bars[i],n=[];const up=b.c>d.vwap[i],e=d.e9[i]>d.e20[i];
   n.push({c:"info",t:`At 9:45 price was ${b.c>d.H?"already above":b.c<d.L?"already below":"inside"} the opening range, ${up?"above":"below"} VWAP, with EMA 9 ${e?"above":"below"} EMA 20.`,l:"pb-or"});
@@ -1486,7 +1505,9 @@ function renderQuickReview(round){
   ul.append(el("li",{class:"info",text:dayStory(d)}));
   if(G.v6.trades.length)for(const t of G.v6.trades)ul.append(el("li",{class:t.pnl>=0?"good":"bad",text:`v6 took a ${t.dir} breakout at ${clk(barClose(t.i))}: ${t.K} ${t.tag} ${fmtP(t.entry)} → ${fmtP(t.exit)} (${t.why}), ${fmt$(t.pnl)}.`}));
   else ul.append(el("li",{class:"info",text:"v6 system: "+G.v6.note+"."}));
-  box.append(ul,cb);box.append(coachBlock(round,{notes:quickNotes(d).map(n=>n.t),story:dayStory(d),odds:cq?cq.facts:null}));r.append(box);
+  const po=el("ul",{class:"notes"});for(const side of ["CALL","PUT"]){const r=q.res[side],a=r.ask;
+    po.append(noteLi(playOutLines(d,I945,r.K,side==="CALL",a,Math.floor(a*0.75*100+1e-9)/100,Math.ceil(a*1.25*100-1e-9)/100,1,`${side==="CALL"?"Call":"Put"} ${r.K} bought at 9:45 for ${fmtP(a)}, with the Quick Read auto-sells (+25% target, −25% stop):`)))}
+  box.append(ul,el("div",{class:"coachbox"},el("div",{class:"eyebrow",text:"Auto-sell and full day"}),po),cb);box.append(coachBlock(round,{notes:quickNotes(d).map(n=>n.t),story:dayStory(d),odds:cq?cq.facts:null}));r.append(box);
 }
 
 function tradeSameDay(){const d=G.day;if(!d)return;stopPlay();G.peeks=0;G.mode="full";syncMode();
@@ -1514,7 +1535,7 @@ function endFull(){
   bumpTicker(d.sym,{n:1,pnl});
   const tags=tagsOf(d);
   const round={id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:Date.now(),mode:"full",sym:d.sym,date:d.date,pnl,xp,v6:G.v6.pnl,tags,gap:+d.gap.toFixed(2),
-    trades:G.trades.map(t=>({dir:t.dir,K:t.K,tag:t.tag,qty:t.qty,entry:t.entry,entryIdx:t.entryIdx,exits:t.exits,pnl:Math.round(t.realized),everStop:t.everStop,snap:t.snap}))};
+    trades:G.trades.map(t=>({dir:t.dir,K:t.K,tag:t.tag,qty:t.qty,entry:t.entry,entryIdx:t.entryIdx,exits:t.exits,pnl:Math.round(t.realized),everStop:t.everStop,firstStop:t.firstStop??null,firstTarget:t.firstTarget??null,snap:t.snap}))};
   awardXP(xp,round);renderAll();renderFullReview(round);
 }
 function tradeNotes(d,t){
@@ -1563,6 +1584,10 @@ function renderFullReview(round){
   if(G.v6.trades.length)for(const t of G.v6.trades)ul.append(el("li",{class:t.pnl>=0?"good":"bad",text:`v6 took a ${t.dir} breakout at ${clk(barClose(t.i))}: ${t.K} ${t.tag} ${fmtP(t.entry)} → ${fmtP(t.exit)} (${t.why}), ${fmt$(t.pnl)}.`}));
   else ul.append(el("li",{class:"info",text:"v6 system: "+G.v6.note+"."}));
   box.append(ul);
+  if(round.trades.length){const po=el("ul",{class:"notes"});
+    G.trades.forEach((t,k)=>{const call=t.dir==="CALL",own=t.firstStop!=null||t.firstTarget!=null,stop=own?t.firstStop??null:Math.floor(t.entry*0.5*100+1e-9)/100,tgt=own?t.firstTarget??null:Math.ceil(t.entry*1.25*100-1e-9)/100;
+      po.append(noteLi(playOutLines(d,t.entryIdx,t.K,call,t.entry,stop,tgt,t.qty,`Trade ${k+1} (${t.qty}× ${t.K} ${call?"call":"put"} at ${fmtP(t.entry)}), ${own?"with the first stop and target you set":"with v6's default auto-sells (+25% target, −50% stop), since you set none"}:`)))});
+    box.append(el("div",{class:"coachbox"},el("div",{class:"eyebrow",text:"Auto-sell and full day"}),po))}
   const odds=[];if(G.trades.length&&COACH){const cb=el("div",{class:"coachbox"},el("div",{class:"eyebrow",text:"Odds coach · from 30,000 simulated mornings"}));
     G.trades.forEach((t,k)=>{const c=coachTrade(d,t);if(!c)return;odds.push(c.facts);if(G.trades.length>1)cb.append(el("h4",{text:`Trade ${k+1}`}));
       const u=el("ul",{class:"notes"});for(const n of c.notes)u.append(noteLi(n));cb.append(u)});box.append(cb)}
