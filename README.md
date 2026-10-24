@@ -5,7 +5,7 @@ A free practice site for the 15-minute opening range breakout with same-day (0DT
 **Play it:** https://nickroberts90.github.io/opening-range-gym/
 
 ## What's inside
-- **Quick Read:** look at the first 15 minutes and call the morning: call, put or no trade.
+- **Quick Read:** look at the opening range and the 9:45–10:15 window, then call the morning at 10:15: call, put or no trade.
 - **Full Trade:** play the morning forward, pick a strike from a live option chain, set stops and targets, scale out.
 - **Chart Reps:** 10-question drills on reading candles, levels, indicators, setups and chart patterns, in six levels.
 - **Lessons:** the opening range, confirmation closes, VWAP, traps, sweeps, gaps, timing, exits and chop.
