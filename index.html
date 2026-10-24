@@ -83,6 +83,17 @@ figure.wk .wk-head{display:grid;gap:2px}figure.wk .wk-head b{font-family:var(--d
 figure.wk .wk-text{margin:0;font-size:15px;line-height:1.55;min-height:4.6em;max-width:68ch}
 canvas.mini.walk{height:340px}@media (max-width:600px){canvas.mini.walk{height:300px}}
 figure.wk .dots{display:flex;gap:6px}figure.wk .dots .dot{width:24px;height:8px;border:0;padding:0;border-radius:4px;cursor:pointer}
+.chal-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:12px}
+@media (max-width:820px){.chal-grid{grid-template-columns:1fr}}
+.chal-today,.chal-acct{padding:16px;display:grid;gap:6px;align-content:start}.chal-today h3{margin:0}.chal-today p{margin:0}
+.chal-acct .big{font:700 26px var(--mono)}
+.chal-sum{border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:12px;margin-bottom:12px}
+.chal-accts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.next5{width:100%;margin-top:10px;display:grid;gap:0;padding:10px 12px;font-size:17px;font-weight:700}
+.next5 small{font-size:12px;font-weight:500;opacity:.85}
+.orders{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px}
+.ord{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
+table.mini-t td{padding:4px 6px;font-size:13px}
 .peek{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;border:1px dashed var(--line);border-radius:10px;padding:8px 10px}
 .peek small{display:block;color:var(--muted);font-size:12px}.peek b{font-family:var(--mono)}
 .ltabs{display:flex;gap:6px;overflow-x:auto;margin:14px 0 16px;padding-bottom:4px;scrollbar-width:thin}
@@ -212,9 +223,10 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
 
 <header>
   <div class="bar">
-    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v4.4</span></div>
+    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v5.0</span></div>
     <nav aria-label="Sections">
       <button id="nav-train" data-view="train" aria-current="page">Train</button>
+      <button id="nav-challenge" data-view="challenge">Challenge</button>
       <button id="nav-lessons" data-view="lessons">Lessons</button>
       <button id="nav-profile" data-view="profile">Profile</button>
       <button id="nav-board" data-view="board">Leaderboard</button>
@@ -276,6 +288,14 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
     </div>
   </section>
 
+  <!-- DAILY CHALLENGE -->
+  <section id="view-challenge" hidden>
+    <div class="eyebrow">Daily Challenge</div>
+    <h2>One morning, one attempt, $10,000</h2>
+    <p class="muted" style="max-width:65ch">Everyone trades the same simulated morning each trading day. Pick your contracts and size them from your paper account; standings rank by return.</p>
+    <div id="chal-body" style="margin-top:14px"></div>
+  </section>
+
   <!-- LESSONS -->
   <section id="view-lessons" hidden>
     <div class="eyebrow">Lessons</div>
@@ -315,8 +335,6 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
     <h2>Who reads the open best</h2>
     <div class="seg" role="group" aria-label="Board" style="margin-top:12px">
       <button id="lb-xp" aria-pressed="true" data-k="xp">XP</button>
-      <button id="lb-pnl" aria-pressed="false" data-k="pnl">Total P&amp;L</button>
-      <button id="lb-best" aria-pressed="false" data-k="best">Best day</button>
       <button id="lb-acc" aria-pressed="false" data-k="acc">Read accuracy</button>
     </div>
     <div class="tablewrap panel" style="margin-top:12px"><table id="lb"></table></div>
@@ -1111,7 +1129,7 @@ function pickDay(sym,tag){
   return fresh[Math.floor(Math.random()*fresh.length)];
 }
 function newDay(tag){
-  stopPlay();
+  stopPlay();chalLeave();G.lastChallenge=null;
   if(tag&&G.mode==="school"){G.mode="quick";syncMode()}
   if(G.mode==="school"){schoolSetup();return}const pick=pickDay($("pick-ticker").value,tag||null);if(!pick){toast("No day matches that pattern for this ticker.");return}
   G.peeks=0;G.practiceTag=tag||null;G.day=pick.sim?(pick.day||simDayOf(pick.s,pick.seed)):dayOf(pick.s,pick.i);G.cur=I945;G.phase="decide";G.choice=null;G.quick=null;G.trades=[];G.open=null;G.reviewAll=false;G.v6=null;
@@ -1294,17 +1312,21 @@ function chainTable(d,S,call,m,sel){
 }
 function fullTicket(t){
   const d=G.day,i=G.cur,S=d.bars[i].c,m=barClose(i),done=G.phase==="review";
-  t.append(el("div",{class:"eyebrow",text:"Full Trade · "+clk(m)}));
+  const CH=G.challenge,bp=CH?chalBuyingPower(CH.date):null;
+  t.append(el("div",{class:"eyebrow",text:(CH?"Daily Challenge · ":"Full Trade · ")+clk(m)}));
+  if(CH)t.append(el("div",{class:"kv",style:"margin-top:4px"},el("span",{text:"Buying power"}),el("b",{text:"$"+Math.round(bp).toLocaleString()})));
   // playback
+  // the main action while a day plays: move the clock forward one candle
+  if(!done)t.append(el("button",{class:"btn primary next5",id:"pb-step",title:"Shortcut: N or →",onclick:()=>step(1)},
+    el("span",{text:"Next 5 min ▶"}),el("small",{text:i<LAST?`show the ${clk(barClose(i+1))} candle`:"close of the day"})));
   const play=el("div",{class:"play"},
-    el("button",{class:"btn sm",id:"pb-play",text:G.playing?"Pause":"Play",disabled:done?"":null,onclick:togglePlay}),
-    el("button",{class:"btn sm",id:"pb-step",text:"+5 min",onclick:()=>step(1)}),
+    el("button",{class:"btn sm",id:"pb-play",text:G.playing?"Pause":"Auto-play",disabled:done?"":null,onclick:togglePlay}),
     el("button",{class:"btn sm",id:"pb-skip",text:"To 11:30",onclick:()=>skipTo(I1130)}),
     el("select",{id:"pb-speed","aria-label":"Speed",onchange:e=>{G.speed=+e.target.value;if(G.playing){stopPlay();startPlay()}}},
       ...[1,2,4,8].map(s=>{const o=el("option",{value:s,text:s+"×"});if(s===G.speed)o.selected=true;return o})));
   if(done)[...play.querySelectorAll("button")].forEach(b=>b.disabled=true);
   t.append(play);
-  if(done){t.append(el("button",{class:"btn primary",style:"width:100%;margin-top:12px",text:"Next day",onclick:()=>newDay(G.practiceTag)}));return}
+  if(done){t.append(G.lastChallenge?el("div",{style:"display:grid;gap:8px;margin-top:12px"},el("button",{class:"btn primary",text:"Back to Challenge standings",onclick:()=>show("challenge")}),el("button",{class:"btn",text:"Free-range practice: new day",onclick:()=>newDay()})):el("button",{class:"btn primary",style:"width:100%;margin-top:12px",text:"Next day",onclick:()=>newDay(G.practiceTag)}));return}
   const o=G.open;
   if(!o){
     const sel=G.ticketSel,call=sel.dir==="CALL",K=strikeOff(d,S,call,sel.off),ask=askOf(d,S,K,call,m),tag=offLabel(sel.off),gk=optGreeks(d,S,K,call,m);
@@ -1316,13 +1338,17 @@ function fullTicket(t){
       el("div",{class:"kv"},el("span",{text:d.sim?"Ask":"Est. ask"}),el("b",{text:fmtP(ask)})),
       el("div",{class:"kv"},el("span",{text:"Cost"}),el("b",{text:"$"+(ask*100*sel.qty).toFixed(0)})),
       el("div",{class:"kv"},el("span",{text:"Delta · decay per 5 min"}),el("b",{text:`${gk.delta.toFixed(2)} · ${fmt$c(gk.theta5*100)}`}))));
-    const qty=el("select",{id:"tk-qty","aria-label":"Contracts",onchange:e=>{sel.qty=+e.target.value;renderTicket()}},...[1,2,3,4].map(q=>{const op=el("option",{value:q,text:q+(q>1?" contracts":" contract")});if(q===sel.qty)op.selected=true;return op}));
-    t.append(el("div",{class:"row",style:"margin-top:10px"},qty,el("button",{class:"btn "+(call?"call":"put"),id:"tk-buy",style:"flex:1",text:"Buy "+(call?"call":"put"),onclick:()=>buy(K,tag,ask)})));
-    t.append(el("button",{class:"btn",id:"tk-end",style:"width:100%;margin-top:10px",text:"End day and review",onclick:endFull}));
+    const maxQ=CH?Math.min(500,Math.floor(bp/(ask*100))):50;if(sel.qty>Math.max(1,maxQ))sel.qty=Math.max(1,maxQ);
+    const qty=el("input",{type:"number",id:"tk-qty",min:"1",max:String(Math.max(1,maxQ)),step:"1",value:String(sel.qty),"aria-label":"Contracts",style:"width:84px",
+      onchange:e=>{sel.qty=Math.max(1,Math.min(Math.max(1,maxQ),Math.round(+e.target.value||1)));renderTicket()}});
+    if(CH)t.append(el("p",{class:"hint",style:"margin:6px 0 0",text:maxQ<1?"Your buying power can't cover one contract of this strike. Pick a cheaper strike or sit out.":`Up to ${maxQ} contracts. This order uses ${(ask*100*sel.qty/Math.max(1,bp)*100).toFixed(1)}% of your buying power.`}));
+    t.append(el("div",{class:"row",style:"margin-top:10px"},qty,el("span",{class:"hint",text:"contracts"}),el("button",{class:"btn "+(call?"call":"put"),id:"tk-buy",style:"flex:1",text:"Buy "+(call?"call":"put"),disabled:CH&&maxQ<1?"":null,onclick:()=>buy(K,tag,ask)})));
+    tradesToday(t);
+    t.append(el("button",{class:"btn",id:"tk-end",style:"width:100%;margin-top:10px",text:CH?"Finish today's challenge":"End day and review",onclick:()=>{if(CH&&!confirmFinish())return;endFull()}}));
     t.append(el("p",{class:"hint",style:"margin:8px 0 0",text:d.sim?"Simulated market. These option prices are the market here, so fills and P&L are exact. Spreads widen when price moves fast.":"Option prices are estimates from a model tuned to real SPY/IWM 0DTE prints. Stock moves are real."}));
   }else{
     const call=o.dir==="CALL",bid=bidOf(d,S,o.K,call,m),pnl=(bid-o.entry)*100*o.left+o.realized;
-    t.append(el("div",{style:"margin-top:10px"},
+    t.append(el("div",{class:"eyebrow",style:"margin-top:12px",text:"Your position"}),el("div",{style:"margin-top:4px"},
       el("div",{class:"kv"},el("span",{text:"Holding"}),el("b",{text:`${o.left}× ${shownSym(d)} ${o.K} ${call?"C":"P"}`})),
       el("div",{class:"kv"},el("span",{text:"Entry"}),el("b",{text:fmtP(o.entry)+" at "+clk(barClose(o.entryIdx))})),
       el("div",{class:"kv"},el("span",{text:"Bid now"}),el("b",{text:fmtP(bid)+" ("+((bid/o.entry-1)*100).toFixed(0)+"%)"})),
@@ -1332,7 +1358,13 @@ function fullTicket(t){
     const tgtIn=el("input",{type:"number",id:"tk-tgt",step:"0.01",min:"0.01",placeholder:"none",value:o.target??""});
     const tq=el("select",{id:"tk-tq","aria-label":"Contracts at target"},...Array.from({length:o.left},(_,k)=>{const op=el("option",{value:k+1,text:(k+1)+""});if(k+1===Math.min(o.tq,o.left))op.selected=true;return op}));
     stopIn.style.width="90px";tgtIn.style.width="90px";
-    t.append(el("div",{style:"display:grid;gap:8px;margin-top:10px"},
+    // working orders, each with a cancel button
+    const ords=el("div",{class:"orders"},el("div",{class:"eyebrow",text:"Working orders"}));
+    if(o.stop!=null)ords.append(el("div",{class:"ord"},el("span",{},"Stop: sell all ",el("b",{text:o.left+""})," if the bid drops to ",el("b",{text:fmtP(o.stop)})),el("button",{class:"btn sm",id:"tk-cx-stop",text:"Cancel",onclick:()=>{o.stop=null;chalSave(true);toast("Stop cancelled");renderTicket()}})));
+    if(o.target!=null)ords.append(el("div",{class:"ord"},el("span",{},"Target: sell ",el("b",{text:Math.min(o.tq,o.left)+""})," at ",el("b",{text:fmtP(o.target)})," (",((o.target/o.entry-1)*100).toFixed(0)+"%)"),el("button",{class:"btn sm",id:"tk-cx-tgt",text:"Cancel",onclick:()=>{o.target=null;chalSave(true);toast("Target cancelled");renderTicket()}})));
+    if(o.stop==null&&o.target==null)ords.append(el("p",{class:"hint",style:"margin:0",text:"No orders working. Set a stop so a losing trade can't run away from you, and a target if you want profits taken automatically."}));
+    t.append(ords,el("div",{class:"eyebrow",style:"margin-top:12px",text:o.stop!=null||o.target!=null?"Change orders":"Set orders"}));
+    t.append(el("div",{style:"display:grid;gap:8px;margin-top:6px"},
       el("label",{class:"row",style:"justify-content:space-between"},el("span",{text:"Stop (sell all)"}),stopIn),
       el("label",{class:"row",style:"justify-content:space-between"},el("span",{text:"Target: sell"}),el("span",{class:"row",style:"gap:6px"},tq,el("span",{text:"at"}),tgtIn)),
       el("div",{class:"row"},
@@ -1343,17 +1375,26 @@ function fullTicket(t){
     t.append(el("div",{class:"row",style:"margin-top:12px"},
       el("button",{class:"btn",id:"tk-sell1",text:"Sell 1",onclick:()=>sell(1,"SOLD")}),
       el("button",{class:"btn primary",id:"tk-sellall",style:"flex:1",text:"Sell all at "+fmtP(bid),onclick:()=>sell(o.left,"SOLD")})));
-    t.append(el("button",{class:"btn",style:"width:100%;margin-top:10px",text:"End day and review",onclick:endFull}));
+    tradesToday(t);
+    t.append(el("button",{class:"btn",id:"tk-end",style:"width:100%;margin-top:10px",text:CH?"Finish today's challenge":"End day and review",onclick:()=>{if(CH&&!confirmFinish())return;endFull()}}));
   }
 }
+function tradesToday(t){if(!G.trades.length)return;const d=G.day;
+  const tb=el("tbody");for(const tr of G.trades){const call=tr.dir==="CALL",open=tr.left>0,bid=open?bidOf(d,d.bars[G.cur].c,tr.K,call,barClose(G.cur)):0,pnl=tr.realized+(open?(bid-tr.entry)*100*tr.left:0);
+    tb.append(el("tr",{},el("td",{text:`${tr.qty}× ${tr.K} ${call?"C":"P"}`}),el("td",{text:clk(barClose(tr.entryIdx))+" @ "+fmtP(tr.entry)}),el("td",{text:open?`open (${tr.left})`:tr.exits.map(e=>e.qty+"@"+fmtP(e.price)).join(", ")}),el("td",{class:"r num "+cls(pnl),text:fmt$(pnl)})))}
+  const tot=Math.round(G.trades.reduce((a,tr)=>{const call=tr.dir==="CALL",open=tr.left>0;return a+tr.realized+(open?(bidOf(d,d.bars[G.cur].c,tr.K,call,barClose(G.cur))-tr.entry)*100*tr.left:0)},0));
+  t.append(el("div",{class:"eyebrow",style:"margin-top:14px",text:"Today's trades"}),el("div",{class:"tablewrap"},el("table",{class:"mini-t"},tb)),el("div",{class:"kv"},el("span",{text:"Day P&L so far"}),el("b",{class:cls(tot),text:fmt$(tot)})))}
 function applyOrders(){const o=G.open;if(!o)return;const s=parseFloat($("tk-stop").value),g=parseFloat($("tk-tgt").value);o.stop=isFinite(s)&&s>0?s:null;o.target=isFinite(g)&&g>0?g:null;o.tq=+$("tk-tq").value||o.left;
   if(o.stop!=null)o.everStop=true;if(o.firstStop==null&&o.stop!=null)o.firstStop=o.stop;if(o.firstTarget==null&&o.target!=null)o.firstTarget=o.target;toast("Orders set"+(o.stop?` · stop ${fmtP(o.stop)}`:"")+(o.target?` · sell ${o.tq} at ${fmtP(o.target)}`:""));renderTicket()}
+function confirmFinish(){if(G.cur>=LAST)return true;const b=$("tk-end")||document.activeElement;if(confirmFinish.armed&&Date.now()-confirmFinish.armed<4000){confirmFinish.armed=0;return true}
+  confirmFinish.armed=Date.now();toast("Finishing sells anything you hold and ends today's only attempt. Select it again to confirm.");return false}
 function buy(K,tag,ask){const sel=G.ticketSel,d=G.day;
+  if(G.challenge&&ask*100*sel.qty>chalBuyingPower(G.challenge.date)+0.5){toast("Not enough buying power for that many contracts.");return}
   const tr={dir:sel.dir,K,tag,qty:sel.qty,left:sel.qty,entry:ask,entryIdx:G.cur,exits:[],realized:0,stop:null,target:null,tq:sel.qty,everStop:false,snap:snapAt(d,G.cur,sel.dir)};
-  G.trades.push(tr);G.open=tr;renderTicket();drawChart();}
+  G.trades.push(tr);G.open=tr;chalSave(true);renderTicket();drawChart();}
 function sell(q,why,price){const o=G.open,d=G.day;if(!o)return;q=Math.min(q,o.left);const call=o.dir==="CALL";
   const p=price??bidOf(d,d.bars[G.cur].c,o.K,call,barClose(G.cur));o.exits.push({qty:q,price:p,idx:G.cur,why});o.realized+=(p-o.entry)*100*q;o.left-=q;
-  if(o.left<=0){o.pnl=Math.round(o.realized);G.open=null}else{o.tq=Math.min(o.tq,o.left)}renderTicket();drawChart()}
+  if(o.left<=0){o.pnl=Math.round(o.realized);G.open=null}else{o.tq=Math.min(o.tq,o.left)}chalSave(true);renderTicket();drawChart()}
 function snapAt(d,i,dir){const b=d.bars[i],up=dir==="CALL";let closesBeyond=0;for(let k=i;k>=3&&closesBeyond<3;k--){if(up?d.bars[k].c>d.H:d.bars[k].c<d.L)closesBeyond++;else break}
   return {price:b.c,vwap:d.vwap[i],e9:d.e9[i],e20:d.e20[i],m:barClose(i),closesBeyond,inside:b.c<=d.H&&b.c>=d.L,against:up?b.c<d.L:b.c>d.H}}
 // advance one bar: check resting orders inside the new bar
@@ -1367,7 +1408,7 @@ function step(n){
       else if(o.target!=null&&r.hi>=o.target){const q=Math.min(o.tq,o.left);sell(q,"TARGET",o.target);if(G.open){G.open.target=null}}}
     if(G.cur>=LAST){if(G.open)sell(G.open.left,"CLOSE");endFull();return}
   }
-  renderFacts();renderTicket();drawChart();
+  chalSave();renderFacts();renderTicket();drawChart();
 }
 function skipTo(i){step(Math.max(0,i-G.cur))}
 function startPlay(){G.playing=true;G.timer=setInterval(()=>{if(G.phase==="review"){stopPlay();return}step(1)},1000/G.speed);renderTicket()}
@@ -1454,6 +1495,12 @@ function schoolTicket(t){
     next>S.level?el("button",{class:"btn",id:"sch-up",text:`Go to Level ${next}`,onclick:()=>startSchool(next)}):null,
     el("button",{class:"btn",id:"sch-pick",text:"Pick a level",onclick:schoolSetup})));
 }
+// Full Trade: N or the right arrow moves the clock forward 5 minutes
+document.addEventListener("keydown",e=>{
+  if(G.mode!=="full"||G.phase==="review"||!G.day||$("view-train").hidden||e.metaKey||e.ctrlKey||e.altKey)return;
+  const tg=e.target;if(tg&&/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName))return;
+  if(e.key==="n"||e.key==="N"||e.key==="ArrowRight"){e.preventDefault();step(1);$("pb-step")?.focus({preventScroll:true})}
+});
 document.addEventListener("keydown",e=>{
   if(G.mode!=="school"||!G.school||$("view-train").hidden||e.metaKey||e.ctrlKey||e.altKey)return;
   const tg=e.target;if(tg&&/^(INPUT|SELECT|TEXTAREA)$/.test(tg.tagName))return;const S=G.school;
@@ -1534,7 +1581,7 @@ function renderQuickReview(round){
   box.append(ul,el("div",{class:"coachbox"},el("div",{class:"eyebrow",text:"Auto-sell and full day"}),po),cb);box.append(coachBlock(round,{notes:quickNotes(d).map(n=>n.t),story:dayStory(d),odds:cq?cq.facts:null}));r.append(box);
 }
 
-function tradeSameDay(){const d=G.day;if(!d)return;stopPlay();G.peeks=0;G.mode="full";syncMode();
+function tradeSameDay(){const d=G.day;if(!d)return;stopPlay();chalLeave();G.lastChallenge=null;G.peeks=0;G.mode="full";syncMode();
   G.cur=I945;G.phase="decide";G.choice=null;G.quick=null;G.trades=[];G.open=null;G.reviewAll=false;G.v6=null;G.sq=null;
   $("c-sym").textContent=d.sym;$("c-date").textContent=(d.sim?`${SIM_META.label[d.sym]} · simulated day #${d.seed}`:dateLabel(d))+" · same morning";
   $("review").replaceChildren();renderAll();window.scrollTo(0,0)}
@@ -1560,7 +1607,8 @@ function endFull(){
   const tags=tagsOf(d);
   const round={id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:Date.now(),mode:"full",sym:d.sym,date:d.date,pnl,xp,v6:G.v6.pnl,tags,gap:+d.gap.toFixed(2),
     trades:G.trades.map(t=>({dir:t.dir,K:t.K,tag:t.tag,qty:t.qty,entry:t.entry,entryIdx:t.entryIdx,exits:t.exits,pnl:Math.round(t.realized),everStop:t.everStop,firstStop:t.firstStop??null,firstTarget:t.firstTarget??null,snap:t.snap}))};
-  awardXP(xp,round);renderAll();renderFullReview(round);
+  let ch=null;if(G.challenge){xp+=5;ch=chalFinish(pnl,round);G.lastChallenge=ch}else G.lastChallenge=null;
+  awardXP(xp,round);renderAll();renderFullReview(round);if(ch)$("review").querySelector(".result")?.prepend(chalSummary(ch));
 }
 function tradeNotes(d,t){
   const n=[],s=t.snap,up=t.dir==="CALL",m=s.m;
@@ -2075,6 +2123,110 @@ function practiceFig(id){
   return fig;
 }
 
+// ---------------------------------------------------------------- Daily Challenge: one shared simulated morning per trading day
+// Everyone gets the same morning (seed "challenge-YYYY-MM-DD", New York date, Monday-Friday) and one attempt.
+// Results feed two $10,000 paper accounts: a weekly one (resets Monday) and a monthly one (resets on the 1st).
+// Buying power is the smaller of the two balances. Ranked by return %, with max drawdown, win days and days played beside it.
+// Stored on the player as player.chal.days[date] = {sym,status,cur,trades,pnl,v6,ts}. XP is kept on every entry so
+// leaderboard tiers by XP can be switched on later.
+const CHAL_START=10000,CHAL_MIN={week:3,month:8};
+function nyDate(t){return new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(t||new Date())}
+const dowOf=s=>new Date(s+"T12:00:00Z").getUTCDay();
+function addDays(s,n){const d=new Date(s+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
+const weekOf=s=>addDays(s,-((dowOf(s)+6)%7));            // Monday of that week
+const monthOf=s=>s.slice(0,7);
+const isTradingDay=s=>{const w=dowOf(s);return w>=1&&w<=5};
+function chalSym(date){let h=7;for(const ch of date)h=(h*31+ch.charCodeAt(0))>>>0;return SIM_TICKERS[h%SIM_TICKERS.length]}
+const chalSeed=date=>"challenge-"+date;
+const fmtD=s=>new Date(s+"T12:00:00Z").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"});
+function chalStore(p){p=p||Store.player;if(!p.chal)p.chal={days:{}};return p.chal}
+// account stats for one period (week or month) from a player's finished days
+function chalAccount(p,period,key,excludeDate){
+  const days=Object.entries((p.chal&&p.chal.days)||{}).filter(([d,r])=>r.status==="done"&&d!==excludeDate&&(period==="week"?weekOf(d):monthOf(d))===key).sort((a,b)=>a[0]<b[0]?-1:1);
+  let bal=CHAL_START,peak=CHAL_START,dd=0,wins=0;const seq=[];
+  for(const [d,r] of days){bal+=r.pnl||0;peak=Math.max(peak,bal);dd=Math.max(dd,(peak-bal)/peak);if((r.pnl||0)>0)wins++;seq.push([d,bal,r.pnl||0])}
+  return {bal,ret:(bal-CHAL_START)/CHAL_START,dd,wins,n:days.length,seq};
+}
+function chalBuyingPower(date){const p=Store.player,w=chalAccount(p,"week",weekOf(date),date),m=chalAccount(p,"month",monthOf(date),date);
+  const today=G.challenge&&G.trades?G.trades.reduce((a,t)=>a+(t.realized||0),0):0;return Math.max(0,Math.min(w.bal,m.bal)+today)}
+// start or resume today's attempt in the Full Trade screen
+function startChallenge(){
+  const date=nyDate();if(!isTradingDay(date)){toast("The Daily Challenge runs Monday to Friday.");return}
+  const C=chalStore(),rec=C.days[date];if(rec&&rec.status==="done"){toast("You've already traded today's challenge.");return}
+  show("train");stopPlay();if(G.mode==="school"){G.sq=null}G.mode="full";if(G.market!=="sim")setMarket("sim",true);syncMode();
+  const sym=rec?rec.sym:chalSym(date),d=simDayOf(sym,chalSeed(date));
+  G.challenge={date};G.day=d;G.peeks=0;G.practiceTag=null;G.phase="decide";G.choice=null;G.quick=null;G.reviewAll=false;G.v6=null;G.revealed=true;
+  G.cur=rec?rec.cur:I945;G.trades=rec?rec.trades:[];G.open=G.trades.find(t=>t.left>0)||null;
+  if(!rec){C.days[date]={sym,status:"open",cur:G.cur,trades:[],ts:Date.now(),xp:Store.player.xp};Store.save()}
+  $("c-sym").textContent=d.sym;$("c-date").textContent=`Daily Challenge · ${fmtD(date)} · ${SIM_META.label[d.sym]}`;
+  $("review").replaceChildren();renderAll();window.scrollTo(0,0);
+  if(rec)toast("Resumed where you left off at "+clk(barClose(G.cur)));
+}
+let chalSaveT=0;
+function chalSave(force){if(!G.challenge)return;const rec=chalStore().days[G.challenge.date];if(!rec||rec.status==="done")return;
+  rec.cur=G.cur;rec.trades=G.trades;const now=Date.now();if(force||now-chalSaveT>2500){chalSaveT=now;Store.save()}}
+function chalLeave(){if(G.challenge){chalSave(true);G.challenge=null}}
+// called by endFull once the day's P&L is known
+function chalFinish(pnl,round){
+  const date=G.challenge.date,rec=chalStore().days[date];G.challenge=null;if(!rec)return;
+  Object.assign(rec,{status:"done",cur:LAST,trades:round.trades,pnl,v6:round.v6,ts:Date.now(),xp:Store.player.xp});round.challenge=date;
+  const w=chalAccount(Store.player,"week",weekOf(date)),m=chalAccount(Store.player,"month",monthOf(date));
+  return {date,w,m};
+}
+function chalSummary(res){const pc=x=>(x>=0?"+":"−")+Math.abs(x*100).toFixed(1)+"%";
+  return el("div",{class:"chal-sum"},el("div",{class:"eyebrow",text:`Daily Challenge · ${fmtD(res.date)}`}),
+    el("div",{class:"chal-accts"},...[["This week",res.w],["This month",res.m]].map(([lab,a])=>el("div",{class:"stat"},el("small",{text:lab}),el("b",{class:cls(a.ret),text:"$"+Math.round(a.bal).toLocaleString()}),el("small",{text:`${pc(a.ret)} · ${a.n} day${a.n===1?"":"s"}`})))),
+    el("button",{class:"btn sm",style:"margin-top:8px",text:"See standings",onclick:()=>show("challenge")}))}
+// ---- the Challenge tab
+function renderChallenge(){
+  const b=$("chal-body");b.replaceChildren();const p=Store.player;if(!p)return;const date=nyDate(),C=chalStore(p),rec=C.days[date],trading=isTradingDay(date);
+  let next=date;if(!trading)while(!isTradingDay(next))next=addDays(next,1);
+  const sym=chalSym(trading?date:next);
+  // today
+  const today=el("div",{class:"panel chal-today"});
+  if(!trading)today.append(el("div",{class:"eyebrow",text:"Today"}),el("h3",{text:"No challenge today"}),el("p",{class:"muted",text:`The Daily Challenge runs Monday to Friday. The next one opens ${fmtD(next)}. Free-range training in Train is open any time.`}));
+  else{today.append(el("div",{class:"eyebrow",text:`Today · ${fmtD(date)}`}),el("h3",{text:`${sym} · ${SIM_META.label[sym]}`}));
+    if(rec&&rec.status==="done")today.append(el("p",{},"Done. You finished today's challenge with ",el("b",{class:cls(rec.pnl),text:fmt$(rec.pnl||0)}),`. The v6 rules made ${rec.v6?fmt$(rec.v6):"$0"} on the same morning. Come back tomorrow for a new one.`));
+    else today.append(el("p",{class:"muted",text:rec?`In progress: you stopped at ${clk(barClose(rec.cur))}. Pick up where you left off.`:"Everyone trades this same simulated morning, once. Size your trades from your account: buy as many contracts as your balance allows."}),
+      el("button",{class:"btn primary",id:"chal-start",text:rec?"Resume today's challenge":"Start today's challenge",onclick:startChallenge}))}
+  // accounts
+  const wk=weekOf(trading?date:next),mo=monthOf(trading?date:next),w=chalAccount(p,"week",wk),m=chalAccount(p,"month",mo),pc=x=>(x>=0?"+":"−")+Math.abs(x*100).toFixed(1)+"%";
+  const acct=(lab,a,reset)=>el("div",{class:"panel chal-acct"},el("div",{class:"eyebrow",text:lab}),el("div",{class:"big "+cls(a.ret),text:"$"+Math.round(a.bal).toLocaleString()}),
+    el("div",{class:"kv"},el("span",{text:"Return"}),el("b",{class:cls(a.ret),text:pc(a.ret)})),el("div",{class:"kv"},el("span",{text:"Max drawdown"}),el("b",{text:a.dd?"−"+(a.dd*100).toFixed(1)+"%":"0%"})),
+    el("div",{class:"kv"},el("span",{text:"Winning days"}),el("b",{text:a.n?`${a.wins} of ${a.n}`:"—"})),el("p",{class:"hint",style:"margin:6px 0 0",text:reset}));
+  b.append(el("div",{class:"chal-grid"},today,acct("Weekly account",w,`Started at $10,000 on ${fmtD(wk)}. Resets each Monday.`),acct("Monthly account",m,`Started at $10,000 on ${fmtD(mo+"-01")}. Resets on the 1st.`)));
+  // standings
+  const sb=el("div",{class:"panel",style:"margin-top:14px"});b.append(sb);
+  const seg=el("div",{class:"seg",role:"group","aria-label":"Standings period"});let per=renderChallenge.per||"week";
+  for(const [k,lab] of [["week","This week"],["month","This month"]])seg.append(el("button",{"aria-pressed":String(per===k),text:lab,onclick:()=>{renderChallenge.per=k;renderChallenge()}}));
+  sb.append(el("div",{class:"row",style:"justify-content:space-between"},el("h3",{style:"margin:0",text:"Standings"}),seg),el("div",{id:"chal-board",class:"tablewrap",style:"margin-top:8px"}),el("p",{class:"hint",id:"chal-note"}));
+  chalBoard(per,per==="week"?wk:mo);
+  // history this month
+  const hist=Object.entries(C.days).filter(([d])=>monthOf(d)===mo).sort((a,b)=>a[0]<b[0]?1:-1);
+  const hb=el("tbody");if(!hist.length)hb.append(el("tr",{},el("td",{colspan:"5",class:"muted",text:"No challenge days yet this month."})));
+  for(const [d,r] of hist)hb.append(el("tr",{},el("td",{text:fmtD(d)}),el("td",{text:r.sym}),el("td",{class:"r num",text:r.status==="done"?String((r.trades||[]).length):"—"}),
+    el("td",{class:"r num "+cls(r.pnl),text:r.status==="done"?fmt$(r.pnl||0):"in progress"}),el("td",{class:"r num "+cls(r.v6),text:r.status==="done"?(r.v6?fmt$(r.v6):"$0"):"—"})));
+  b.append(el("h3",{style:"margin-top:22px",text:"Your challenge days this month"}),el("div",{class:"tablewrap panel",style:"margin-top:8px"},el("table",{},el("thead",{},el("tr",{},...["Day","Ticker","Trades","Your P&L","v6 P&L"].map((h,i)=>el("th",{class:i>1?"r":"",text:h})))),hb)));
+  b.append(el("p",{class:"hint",style:"margin-top:14px;max-width:70ch",text:`Rules: one attempt per trading day, and you can leave and resume it. Your results feed two $10,000 paper accounts at once: a weekly one that resets every Monday and a monthly one that resets on the 1st. You can spend up to the smaller of the two balances. Standings rank by return, and you need ${CHAL_MIN.week} days in a week or ${CHAL_MIN.month} days in a month to be ranked. Free-range practice in Train never touches these accounts.`}));
+}
+async function chalBoard(per,key){
+  const box=$("chal-board");box.replaceChildren(el("p",{class:"muted",text:"Loading…"}));
+  const rows=PUBLIC?[{id:"me",...Store.player,isMe:true}]:await Store.board();let ps={};
+  if(!PUBLIC&&Store.user&&Store.mode==="db"){try{ps=await Store.user.profiles(rows.map(r=>r.id))}catch(e){}}
+  const L=rows.map(r=>({r,a:chalAccount(r,per,key)})).filter(x=>x.a.n>0),min=CHAL_MIN[per];
+  const ranked=L.filter(x=>x.a.n>=min).sort((a,b)=>b.a.ret-a.a.ret),pending=L.filter(x=>x.a.n<min).sort((a,b)=>b.a.n-a.a.n||b.a.ret-a.a.ret);
+  const pc=x=>(x>=0?"+":"−")+Math.abs(x*100).toFixed(1)+"%";
+  const tb=el("table",{},el("thead",{},el("tr",{},...["#","Trader","Level","Return","Max drawdown","Winning days","Days"].map((h,i)=>el("th",{class:i>2?"r":"",text:h})))));const body=el("tbody");
+  const row=(x,rank)=>{const name=x.r.handle||(ps[x.r.id]&&ps[x.r.id].name)||"Trader",l=levelOf(x.r.xp||0);
+    return el("tr",{style:x.r.isMe?"background:var(--accent-soft)":""},el("td",{class:"num",text:rank}),el("td",{},el("span",{text:name}),x.r.isMe?el("span",{class:"pill acc",style:"margin-left:6px",text:"you"}):null),
+      el("td",{text:l.n+" · "+l.name}),el("td",{class:"r num "+cls(x.a.ret),text:pc(x.a.ret)}),el("td",{class:"r num",text:x.a.dd?"−"+(x.a.dd*100).toFixed(1)+"%":"0%"}),el("td",{class:"r num",text:`${x.a.wins}/${x.a.n}`}),el("td",{class:"r num",text:String(x.a.n)}))};
+  ranked.forEach((x,k)=>body.append(row(x,String(k+1))));
+  if(pending.length){body.append(el("tr",{},el("td",{colspan:"7",class:"hint",text:`Not ranked yet (fewer than ${min} days):`})));pending.forEach(x=>body.append(row(x,"–")))}
+  if(!L.length)body.append(el("tr",{},el("td",{colspan:"7",class:"muted",text:"No challenge results yet for this "+per+"."})));
+  tb.append(body);box.replaceChildren(tb);
+  $("chal-note").textContent=PUBLIC?"Shared standings arrive with sign-in accounts. For now this shows your own results, saved in this browser.":Store.mode==="db"?"Everyone you've shared this page with appears here once they finish a challenge day.":"Standings need the published page and a signed-in viewer. Showing only you.";
+}
+
 
 // ---------------------------------------------------------------- profile + leaderboard
 function renderProfile(){
@@ -2135,18 +2287,18 @@ document.querySelectorAll("#view-board .seg button").forEach(b=>b.addEventListen
 $("p-save").addEventListener("click",async()=>{Store.player.handle=$("p-handle").value.trim().slice(0,24);await Store.save();renderProfile();toast("Name saved")});
 
 // ---------------------------------------------------------------- navigation + mode
-function show(v){for(const s of ["train","lessons","profile","board"]){$("view-"+s).hidden=s!==v;$("nav-"+s).setAttribute("aria-current",s===v?"page":"false")}
-  if(v==="profile")renderProfile();if(v==="board")renderBoard();if(v==="train")drawChart();window.scrollTo(0,0)}
+function show(v){for(const s of ["train","challenge","lessons","profile","board"]){$("view-"+s).hidden=s!==v;$("nav-"+s).setAttribute("aria-current",s===v?"page":"false")}
+  if(v==="profile")renderProfile();if(v==="board")renderBoard();if(v==="challenge")renderChallenge();if(v==="train")drawChart();window.scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>show(b.dataset.view)));
 function syncMode(){$("mode-quick").setAttribute("aria-pressed",String(G.mode==="quick"));$("mode-full").setAttribute("aria-pressed",String(G.mode==="full"));
   const sch=G.mode==="school";$("mode-school").setAttribute("aria-pressed",String(sch));$("mk-real").disabled=sch;for(const id of ["pick-overlay","pick-panel"]){$(id).disabled=sch;$(id).title=sch?"Chart Reps shows the study each question needs":""}$("mk-real").title=sch?"Chart Reps uses simulated charts only":"";
   $("new-day").textContent=sch?"New round":"New day";if(!sch)G.sq=null;
-  $("mode-hint").textContent=sch?"Chart Reps: 10 quick questions on simulated charts. Each one freezes the chart at one moment and asks what you see. Score 8 or more to unlock the next level.":G.mode==="quick"?"Quick Read: look at the first 15 minutes and call the morning. Call, put, or no trade. Graded by whether a 9:45 ATM option hits +25% before −25% by 11:30. +5 min shows one more candle before you call, for less XP."
+  $("mode-hint").textContent=sch?"Chart Reps: 10 quick questions on simulated charts. Each one freezes the chart at one moment and asks what you see. Score 8 or more to unlock the next level.":G.mode==="quick"?"Quick Read: look at the first 15 minutes and call the morning. Call, put, or no trade. Graded by whether a 9:45 ATM option hits +25% before −25% by 11:30. +5 min shows one more candle before you call, for less XP. Free range: play as many days as you like; nothing here touches the Challenge accounts."
   :(G.market==="sim"?"Full Trade on a simulated market: candles play forward from 9:45. Pick any strike from the chain, set a stop and target, scale out, or sit out. In the simulation the option prices are the market, so every fill and P&L is exact."
    :"Full Trade: candles play forward from 9:45. Buy, set a stop and target, scale out, or sit out. Option prices are estimated; stock moves are real.")}
 $("mode-quick").addEventListener("click",()=>{if(G.mode==="quick")return;G.mode="quick";syncMode();newDay(G.practiceTag)});
-$("mode-full").addEventListener("click",()=>{if(G.mode==="full")return;G.mode="full";syncMode();newDay(G.practiceTag)});
-$("mode-school").addEventListener("click",()=>{if(G.mode==="school")return;stopPlay();G.mode="school";if(G.market!=="sim")setMarket("sim",true);syncMode();schoolSetup()});
+$("mode-full").addEventListener("click",()=>{if(G.mode==="full"&&!G.lastChallenge&&!G.challenge)return;G.mode="full";syncMode();newDay(G.practiceTag)});
+$("mode-school").addEventListener("click",()=>{if(G.mode==="school")return;stopPlay();chalLeave();G.mode="school";if(G.market!=="sim")setMarket("sim",true);syncMode();schoolSetup()});
 $("new-day").addEventListener("click",()=>newDay());
 $("pick-ticker").addEventListener("change",()=>newDay());
 function fillTickers(){const sel=$("pick-ticker");sel.replaceChildren(el("option",{value:"ANY",text:"Random"}),...(G.market==="sim"?SIM_TICKERS:TICKERS).map(s=>el("option",{value:s,text:symLabel(s)})))}
