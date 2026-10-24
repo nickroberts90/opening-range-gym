@@ -1788,8 +1788,8 @@ function readerView(b,L){
     for(const s of L.deep){if(s.h)art.append(el("h3",{text:s.h}));if(s.p)art.append(el("p",{text:s.p}));if(s.ul)art.append(el("ul",{},...s.ul.map(x=>el("li",{text:x}))));if(s.stat){const sb=statBlock(s.stat);if(sb)art.append(sb)}}
     const p=practiceBtn(L.practice,true);if(p)art.append(el("div",{class:"row",style:"margin-top:18px"},p));
     if(L.sources&&L.sources.length)art.append(el("h3",{text:"Further reading"}),
-      el("p",{class:"hint",style:"margin:0",text:"This lesson is original writing for this site. StockCharts ChartSchool covers the same topics in more depth:"}),
-      el("ul",{class:"srcs"},...L.sources.map(s=>el("li",{},el("a",{href:CS_BASE+s,target:"_blank",rel:"noopener",text:srcTitle(s)})))));
+      el("p",{class:"hint",style:"margin:0",text:"External articles on stockcharts.com. Opening Range Gym is not affiliated with or endorsed by StockCharts; links open their site in a new tab."}),
+      el("ul",{class:"srcs"},...L.sources.map(s=>el("li",{},el("a",{href:CS_BASE+s,target:"_blank",rel:"noopener noreferrer",text:srcTitle(s)+" ↗"})))));
   }
   art.append(el("nav",{class:"lnav","aria-label":"More lessons"},
     prev?el("button",{class:"btn sm",onclick:()=>openLesson(prev.id)},el("small",{text:"Previous"}),el("b",{text:prev.title})):el("span"),
