@@ -229,7 +229,7 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
 
 <header>
   <div class="bar">
-    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v5.3</span></div>
+    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v5.4</span></div>
     <nav aria-label="Sections">
       <button id="nav-train" data-view="train" aria-current="page">Train</button>
       <button id="nav-challenge" data-view="challenge">Challenge</button>
@@ -347,7 +347,7 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
     <p class="hint" id="lb-note"></p>
   </section>
 </main>
-<footer class="foot"><p id="disclaimer"></p><p style="margin-top:6px"><button class="linkbtn" id="tour-again">Take the welcome tour again</button></p></footer>
+<footer class="foot"><p id="disclaimer"></p><p style="margin-top:6px"><button class="linkbtn" id="tour-again">Take the welcome tour again</button> · <button class="linkbtn" id="tips-again">Show tips again</button></p></footer>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -2265,6 +2265,24 @@ function startFullTour(){
     {sel:"#tk-qty",title:"Size and buy",text:"Choose how many contracts and buy. Practice here is free range: as many days and trades as you like, and none of it touches the Daily Challenge."},
     {sel:"#pb-step",title:"Move the clock",text:"Next 5 min reveals the next candle (the N or → key works too). Once you own something, set a stop right away and a target if you want profits taken automatically. Your working orders show in this panel and you can cancel or change them any time."}]);
 }
+// Lessons and Challenge tips: the first time someone opens each tab
+function tourMaybeTab(v){const p=Store.player;if(T.on||!tourAllowed()||!p||(p.tour&&p.tour[v]))return;
+  setTimeout(()=>{if(T.on||$("view-"+v).hidden)return;if(v==="lessons")startLessonsTour();if(v==="challenge")startChallengeTour()},350)}
+function startLessonsTour(){
+  if(LX.view!=="track"){LX.view="track";LX.track="foundations";renderLX()}
+  tourRun("lessons",[
+    {sel:"#l-tracks",title:"Lessons: pick a track",text:"Lessons are grouped into tracks, from Foundations to Risk and psychology. New to charts? Start with Foundations and work left to right. Playbook covers this gym's own opening range rules."},
+    {sel:"#l-body .lesson",title:"Short card, full lesson",text:"Each card is the short version. \"Read the lesson\" opens the full one: key points, an example from a simulated morning (press \"Show what happened next\" to see how it played out), how often the pattern works, and a button to practice it."},
+    {sel:"#lt-playbook",title:"Playbook walkthroughs",text:"Playbook lessons have step-by-step walkthroughs: arrows on a real morning showing what to watch, one step at a time. Each ends with three fresh practice charts so you can spot the setup yourself."},
+    {sel:"#lt-glossary",title:"Glossary",text:"Stuck on a word like VWAP, delta or theta? The Glossary explains every term in plain words and links to its lesson. Tapping a label under any chart opens its entry too."}]);
+}
+function startChallengeTour(){
+  tourRun("challenge",[
+    {sel:".chal-today",title:"One morning a day",text:"Monday to Friday, everyone trades the same simulated morning, once. You can leave partway and resume where you stopped. Finishing locks in your result for the day."},
+    {sel:".chal-acct",title:"Two $10,000 accounts",text:"Each day's profit or loss goes into both a weekly account (resets every Monday) and a monthly one (resets on the 1st). You can spend up to the smaller balance, so how many contracts you buy matters as much as which ones."},
+    {sel:"#chal-board",title:"Standings",text:"Standings rank by return. Max drawdown (your worst drop from a high) and winning days show how steady you were. You need 3 days in a week or 8 in a month to be ranked."},
+    {sel:"#chal-start, .chal-today",title:"Ready when you are",text:"Start today's challenge when you're ready. Practice in Train is free range and never touches these accounts, so warm up there first if you like."}]);
+}
 function tourRun(key,steps){T.on=key;T.k=0;T.steps=steps;
   if(!T.card){T.card=el("div",{class:"tour-card",role:"dialog","aria-live":"polite","aria-label":"Tour"});document.body.append(T.card)}
   T.card.hidden=false;tourShow()}
@@ -2278,7 +2296,7 @@ function tourShow(){
   G.tourChart=s.chart||null;drawChart();
   const last=T.k===T.steps.length-1;
   T.card.className="tour-card"+(s.center?" center":"");
-  T.card.replaceChildren(el("div",{class:"eyebrow",text:`${T.on==="main"?"Welcome tour":"Full Trade tips"} · ${T.k+1} of ${T.steps.length}`}),el("h3",{text:s.title}),el("p",{text:s.text}));
+  T.card.replaceChildren(el("div",{class:"eyebrow",text:`${{main:"Welcome tour",full:"Full Trade tips",lessons:"Lessons tips",challenge:"Challenge tips"}[T.on]} · ${T.k+1} of ${T.steps.length}`}),el("h3",{text:s.title}),el("p",{text:s.text}));
   if(s.end)T.card.append(el("div",{class:"tour-go"},
     el("button",{class:"btn",onclick:()=>{tourEnd(true);LX.view="track";LX.track="foundations";show("lessons");renderLX()}},el("b",{text:"Learn the basics"}),el("small",{text:"Lessons, starting with Foundations"})),
     el("button",{class:"btn",onclick:()=>{tourEnd(true);newDay()}},el("b",{text:"Quick reps"}),el("small",{text:"More Quick Reads, or Chart Reps"})),
@@ -2291,6 +2309,7 @@ function tourShow(){
 }
 // hooks from the game: the guided call
 function tourAfter(ev){if(T.on&&T.steps[T.k]&&T.steps[T.k].wait===ev){T.k++;setTimeout(tourShow,300)}}
+function tourResetTips(){const p=Store.player;if(!p)return;p.tour=Object.assign({},p.tour);delete p.tour.full;delete p.tour.lessons;delete p.tour.challenge;Store.save();toast("Tips will show again the next time you open Lessons, Challenge and Full Trade.")}
 function tourEnd(done){const key=T.on;tourClearHL();drawChart();T.on=null;if(T.card)T.card.hidden=true;if(!key)return;
   tourMark(key);
   if(key==="main"&&done){const p=Store.player;p.xp+=10;const nb=[];for(const [id,name,,test] of BADGES)if(!p.badges[id]&&test(p)){p.badges[id]=Date.now();nb.push(name)}
@@ -2357,7 +2376,7 @@ $("p-save").addEventListener("click",async()=>{Store.player.handle=$("p-handle")
 
 // ---------------------------------------------------------------- navigation + mode
 function show(v){for(const s of ["train","challenge","lessons","profile","board"]){$("view-"+s).hidden=s!==v;$("nav-"+s).setAttribute("aria-current",s===v?"page":"false")}
-  if(v==="profile")renderProfile();if(v==="board")renderBoard();if(v==="challenge")renderChallenge();if(v==="train")drawChart();window.scrollTo(0,0)}
+  if(v==="profile")renderProfile();if(v==="board")renderBoard();if(v==="challenge")renderChallenge();if(v==="lessons"||v==="challenge")tourMaybeTab(v);if(v==="train")drawChart();window.scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>show(b.dataset.view)));
 function syncMode(){$("mode-quick").setAttribute("aria-pressed",String(G.mode==="quick"));$("mode-full").setAttribute("aria-pressed",String(G.mode==="full"));
   const sch=G.mode==="school";$("mode-school").setAttribute("aria-pressed",String(sch));$("mk-real").disabled=sch;for(const id of ["pick-overlay","pick-panel"]){$(id).disabled=sch;$(id).title=sch?"Chart Reps shows the study each question needs":""}$("mk-real").title=sch?"Chart Reps uses simulated charts only":"";
@@ -2377,7 +2396,7 @@ $("mk-sim").addEventListener("click",()=>setMarket("sim"));
 fillTickers();
 for(const [id,key] of [["pick-overlay","overlay"],["pick-panel","panel"]]){const sel=$(id);sel.value=STUDY_PREF[key]||"";
   sel.addEventListener("change",()=>{STUDY_PREF[key]=sel.value;try{localStorage.setItem("org.studies",JSON.stringify(STUDY_PREF))}catch(e){}drawChart()})}
-$("tour-again").addEventListener("click",()=>{if(Store.player)startWelcomeTour()});
+$("tour-again").addEventListener("click",()=>{if(Store.player)startWelcomeTour()});$("tips-again").addEventListener("click",tourResetTips);
 document.querySelectorAll(".legend .lg[data-g]").forEach(b=>b.addEventListener("click",()=>openGlossary(b.dataset.g)));
 
 function renderAll(){renderFacts();renderTicket();drawChart()}
