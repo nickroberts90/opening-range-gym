@@ -94,6 +94,12 @@ figure.wk .dots{display:flex;gap:6px}figure.wk .dots .dot{width:24px;height:8px;
 .orders{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px}
 .ord{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
 table.mini-t td{padding:4px 6px;font-size:13px}
+.tour-hl{outline:3px solid var(--amber);outline-offset:3px;border-radius:8px;position:relative;z-index:1}
+.tour-card{position:fixed;right:18px;bottom:18px;z-index:30;width:min(400px,calc(100vw - 32px));background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:12px;padding:14px 16px;box-shadow:0 12px 32px rgba(0,0,0,.22)}
+.tour-card h3{margin:2px 0 4px;font-family:var(--display)}.tour-card p{margin:0;line-height:1.5;font-size:14px}
+.tour-card.center{right:50%;bottom:50%;transform:translate(50%,50%);width:min(520px,calc(100vw - 32px))}
+.tour-go{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.tour-go .btn{display:grid;gap:2px;text-align:left;height:auto;padding:10px 12px}.tour-go small{color:var(--muted);font-weight:400}
+@media (max-width:700px){.tour-card{right:16px;left:16px;bottom:12px;width:auto}.tour-card.center{left:16px;right:16px;bottom:auto;top:50%;transform:translateY(-50%)}}
 .peek{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;border:1px dashed var(--line);border-radius:10px;padding:8px 10px}
 .peek small{display:block;color:var(--muted);font-size:12px}.peek b{font-family:var(--mono)}
 .ltabs{display:flex;gap:6px;overflow-x:auto;margin:14px 0 16px;padding-bottom:4px;scrollbar-width:thin}
@@ -223,7 +229,7 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
 
 <header>
   <div class="bar">
-    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v5.2</span></div>
+    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v5.3</span></div>
     <nav aria-label="Sections">
       <button id="nav-train" data-view="train" aria-current="page">Train</button>
       <button id="nav-challenge" data-view="challenge">Challenge</button>
@@ -341,7 +347,7 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
     <p class="hint" id="lb-note"></p>
   </section>
 </main>
-<footer class="foot"><p id="disclaimer"></p></footer>
+<footer class="foot"><p id="disclaimer"></p><p style="margin-top:6px"><button class="linkbtn" id="tour-again">Take the welcome tour again</button></p></footer>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -1136,7 +1142,7 @@ function newDay(tag){
   G.revealed=false;$("c-sym").textContent=shownSym(G.day);
   const hidden=G.day.sim?"simulated":hideSym(G.day)?"ticker and date hidden until the review":"date hidden until the review";
   $("c-date").textContent=tag?`Practice: ${TAG_LABEL[tag]||tag} · ${hidden}`:G.day.sim?SIM_META.label[G.day.sym]+" · simulated":hidden[0].toUpperCase()+hidden.slice(1);
-  $("review").replaceChildren();renderAll();
+  $("review").replaceChildren();renderAll();if(G.mode==="full")tourMaybeFull();
 }
 
 // ---------------------------------------------------------------- chart
@@ -1199,6 +1205,7 @@ function drawChart(){
   for(const v of [day.H,day.L]){cx.beginPath();cx.moveTo(orx,Math.round(y(v))+.5);cx.lineTo(W-padR,Math.round(y(v))+.5);cx.stroke()}
   cx.setLineDash([]);cx.globalAlpha=1;
   tag(W-padR,y(day.H),"OR H",cssv("--accent"));tag(W-padR,y(day.L),"OR L",cssv("--accent"));
+  if(G.tourChart==="or"){cx.save();cx.strokeStyle=cssv("--amber");cx.lineWidth=3;cx.strokeRect(orx-4,y(day.H)-5,xT(2)+sw/2-orx+8,y(day.L)-y(day.H)+10);cx.font="700 12px "+cssv("--body");cx.fillStyle=cssv("--amber");cx.textBaseline="bottom";cx.fillText("opening range",orx-2,y(day.H)-8);cx.restore()}
   // prior close
   if(day.pc<=hi&&day.pc>=lo){cx.strokeStyle=cssv("--muted");cx.setLineDash([1,3]);cx.beginPath();cx.moveTo(padL,y(day.pc));cx.lineTo(W-padR,y(day.pc));cx.stroke();cx.setLineDash([]);tag(W-padR,y(day.pc),"PC",cssv("--muted"))}
   // volume
@@ -1528,7 +1535,7 @@ function finishQuick(){
   bumpTicker(d.sym,{quickN:1,quickRight:right?1:0});
   const tags=tagsOf(d);
   const round={id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:Date.now(),mode:"quick",at:QUICK_AT,sym:d.sym,date:d.date,choice:G.choice,answer:q.ans,right,xp,peeks,v6:G.v6.pnl,tags,gap:+d.gap.toFixed(2)};
-  awardXP(xp,round);renderAll();renderQuickReview(round);
+  awardXP(xp,round);renderAll();renderQuickReview(round);tourAfter("quick");
 }
 // Auto-sell and full day: when a stop or target on this option would have sold (first one touched, stop first if both
 // fall in the same candle, the same rule v6 uses), and what holding with no auto-sell to the 3:55 close would have been worth.
@@ -1586,7 +1593,7 @@ function renderQuickReview(round){
 function tradeSameDay(){const d=G.day;if(!d)return;stopPlay();chalLeave();G.lastChallenge=null;G.peeks=0;G.mode="full";syncMode();
   G.cur=I945;G.phase="decide";G.choice=null;G.quick=null;G.trades=[];G.open=null;G.reviewAll=false;G.v6=null;G.sq=null;
   $("c-sym").textContent=d.sym;$("c-date").textContent=(d.sim?`${SIM_META.label[d.sym]} · simulated day #${d.seed}`:dateLabel(d))+" · same morning";
-  $("review").replaceChildren();renderAll();window.scrollTo(0,0)}
+  $("review").replaceChildren();renderAll();window.scrollTo(0,0);tourMaybeFull()}
 // ---------------------------------------------------------------- Full Trade review
 function endFull(){
   if(G.phase==="review")return;stopPlay();
@@ -1700,7 +1707,8 @@ const BADGES=[
   ["school1","Chart Reader","Finish a Chart Reps round",p=>(p.school?.n||0)>=1],
   ["school10","Sharp Eyes","Score 10 out of 10 in Chart Reps",p=>(p.school?.perfect||0)>=1],
   ["school3","Setup Spotter","Score 8 or more on Chart Reps Level 3",p=>(p.school?.l3pass||0)>=1],
-  ["school6","Pattern Reader","Score 8 or more on Chart Reps Level 6",p=>(p.school?.bestBy?.[6]||0)>=8]];
+  ["school6","Pattern Reader","Score 8 or more on Chart Reps Level 6",p=>(p.school?.bestBy?.[6]||0)>=8],
+  ["tour","First Steps","Finish the welcome tour",p=>!!p.tour?.main]];
 function bumpTicker(sym,add){const t=Store.player.tickers[sym]||(Store.player.tickers[sym]={n:0,pnl:0,quickN:0,quickRight:0});for(const k in add)t[k]=(t[k]||0)+add[k]}
 async function awardXP(xp,round){
   const p=Store.player,before=levelOf(p.xp).n;p.xp+=xp;
@@ -2229,6 +2237,65 @@ async function chalBoard(per,key){
   $("chal-note").textContent=PUBLIC?"Shared standings arrive with sign-in accounts. For now this shows your own results, saved in this browser.":Store.mode==="db"?"Everyone you've shared this page with appears here once they finish a challenge day.":"Standings need the published page and a signed-in viewer. Showing only you.";
 }
 
+// ---------------------------------------------------------------- Welcome tour (first visit) and Full Trade tour (first time in Full Trade)
+// The welcome tour plays one fixed, clean simulated morning (S-IDX, seed "tour-1769": a call breakout at 9:55 that hits
+// its +25% target at 10:20) as a guided Quick Read. Each step highlights a real part of the screen; a card explains it.
+// Finishing gives 10 XP and the First Steps badge. Progress lives on the player (player.tour = {main, full}).
+// Skipped automatically under browser automation (navigator.webdriver) unless the URL has ?tour=1, so tests aren't blocked.
+const TOUR_DAY={sym:"S-IDX",seed:"tour-1769"};
+const T={on:null,k:0,steps:[],card:null,hl:null};
+const tourAllowed=()=>!navigator.webdriver||/[?&]tour=1/.test(location.search);
+function tourMaybeStart(){const p=Store.player;if(!tourAllowed()||!p||(p.tour&&p.tour.main)||p.rounds>0)return;startWelcomeTour()}
+function tourMaybeFull(){const p=Store.player;if(T.on||!tourAllowed()||!p||(p.tour&&p.tour.full)||G.challenge)return;setTimeout(()=>{if(G.mode==="full"&&G.phase==="decide"&&!T.on)startFullTour()},300)}
+function tourMark(key){const p=Store.player;p.tour=Object.assign({},p.tour,{[key]:Date.now()});Store.save()}
+function startWelcomeTour(){
+  show("train");stopPlay();chalLeave();if(G.market!=="sim")setMarket("sim",true);if(G.mode!=="quick"){G.mode="quick";syncMode()}
+  G.peeks=0;G.practiceTag=null;G.day=simDayOf(TOUR_DAY.sym,TOUR_DAY.seed);G.cur=QUICK_AT;G.phase="decide";G.choice=null;G.quick=null;G.trades=[];G.open=null;G.reviewAll=false;G.v6=null;G.revealed=false;
+  $("c-sym").textContent=G.day.sym;$("c-date").textContent="Welcome tour · simulated";$("review").replaceChildren();renderAll();
+  tourRun("main",[
+    {sel:"#chart",chart:"or",title:"Welcome to Opening Range Gym",text:"This is a simulated stock's morning in 5-minute candles. The shaded box is the opening range: the high and low of the first 15 minutes, 9:30 to 9:45. When price breaks out of that box, the move often keeps going for the next hour. That's the whole game here."},
+    {sel:"#agree",also:".legend",title:"VWAP and the EMAs",text:"The thick blue line is VWAP, the average price everyone paid today. The orange and purple lines are EMA 9 and EMA 20, two moving averages. This line tells you whether price is above VWAP and which EMA is on top, and whether they agree. Tap any label under the chart to see what it means."},
+    {sel:"#ticket .choices",title:"Make your call",text:"It's 10:15. Price broke above the box and VWAP and the EMAs agree. Would you buy a call (betting price goes up), a put (betting it goes down), or skip the morning? Pick one to see how it played out.",wait:"quick"},
+    {sel:"#review .result",title:"The review",text:"Every round ends here: whether your read was right, what an option bought at 10:15 did, when its target or stop would have sold it, what holding all day would have done, and what the gym's v6 rules traded. Tap any \"Learn\" link to open the lesson behind a note."},
+    {center:true,title:"Where to next?",text:"You've got the basics. Pick where to go; you can replay this tour any time from the bottom of the page.",end:true}]);
+}
+function startFullTour(){
+  tourRun("full",[
+    {sel:"#ticket .chain",title:"Full Trade: pick your contract",text:"Each row is a strike. Ask is what you pay per share (one contract is 100 shares), and delta is roughly how much the option moves when the stock moves $1. At the money is the row nearest the price; further out is cheaper but needs a bigger move."},
+    {sel:"#tk-qty",title:"Size and buy",text:"Choose how many contracts and buy. Practice here is free range: as many days and trades as you like, and none of it touches the Daily Challenge."},
+    {sel:"#pb-step",title:"Move the clock",text:"Next 5 min reveals the next candle (the N or → key works too). Once you own something, set a stop right away and a target if you want profits taken automatically. Your working orders show in this panel and you can cancel or change them any time."}]);
+}
+function tourRun(key,steps){T.on=key;T.k=0;T.steps=steps;
+  if(!T.card){T.card=el("div",{class:"tour-card",role:"dialog","aria-live":"polite","aria-label":"Tour"});document.body.append(T.card)}
+  T.card.hidden=false;tourShow()}
+function tourClearHL(){document.querySelectorAll(".tour-hl").forEach(e=>e.classList.remove("tour-hl"));G.tourChart=null}
+function tourShow(){
+  const s=T.steps[T.k];if(!s)return tourEnd(true);tourClearHL();
+  const tgt=s.sel?document.querySelector(s.sel):null;
+  if(s.sel&&!tgt){setTimeout(()=>{if(T.on&&T.steps[T.k]===s)tourShow()},250);return}
+  if(tgt){tgt.classList.add("tour-hl");const r=tgt.getBoundingClientRect(),narrow=innerWidth<700;const hh=(document.querySelector("header")?.getBoundingClientRect().height||60)+14;window.scrollTo({top:Math.max(0,scrollY+r.top-hh-(narrow?0:30)),behavior:"smooth"})}
+  if(s.also)document.querySelectorAll(s.also).forEach(e=>e.classList.add("tour-hl"));
+  G.tourChart=s.chart||null;drawChart();
+  const last=T.k===T.steps.length-1;
+  T.card.className="tour-card"+(s.center?" center":"");
+  T.card.replaceChildren(el("div",{class:"eyebrow",text:`${T.on==="main"?"Welcome tour":"Full Trade tips"} · ${T.k+1} of ${T.steps.length}`}),el("h3",{text:s.title}),el("p",{text:s.text}));
+  if(s.end)T.card.append(el("div",{class:"tour-go"},
+    el("button",{class:"btn",onclick:()=>{tourEnd(true);LX.view="track";LX.track="foundations";show("lessons");renderLX()}},el("b",{text:"Learn the basics"}),el("small",{text:"Lessons, starting with Foundations"})),
+    el("button",{class:"btn",onclick:()=>{tourEnd(true);newDay()}},el("b",{text:"Quick reps"}),el("small",{text:"More Quick Reads, or Chart Reps"})),
+    el("button",{class:"btn",onclick:()=>{tourEnd(true);G.mode="full";syncMode();newDay()}},el("b",{text:"Trade it"}),el("small",{text:"Full Trade, free practice"})),
+    el("button",{class:"btn",onclick:()=>{tourEnd(true);show("challenge")}},el("b",{text:"Compete"}),el("small",{text:"The Daily Challenge, $10,000"}))));
+  const nav=el("div",{class:"row",style:"justify-content:space-between;margin-top:10px"},el("button",{class:"linkbtn",text:last?"Close":"Skip tour",onclick:()=>tourEnd(last)}));
+  if(!s.wait&&!s.end)nav.append(el("button",{class:"btn sm primary",id:"tour-next",text:last?"Done":"Next →",onclick:()=>{T.k++;tourShow()}}));
+  if(s.wait)nav.append(el("span",{class:"hint",text:"Pick Call, Put or No trade"}));
+  T.card.append(nav);
+}
+// hooks from the game: the guided call
+function tourAfter(ev){if(T.on&&T.steps[T.k]&&T.steps[T.k].wait===ev){T.k++;setTimeout(tourShow,300)}}
+function tourEnd(done){const key=T.on;tourClearHL();drawChart();T.on=null;if(T.card)T.card.hidden=true;if(!key)return;
+  tourMark(key);
+  if(key==="main"&&done){const p=Store.player;p.xp+=10;const nb=[];for(const [id,name,,test] of BADGES)if(!p.badges[id]&&test(p)){p.badges[id]=Date.now();nb.push(name)}
+    renderMe();Store.save();toast("+10 XP"+(nb.length?" · Badge earned: "+nb.join(", "):""))}}
+
 
 // ---------------------------------------------------------------- profile + leaderboard
 function renderProfile(){
@@ -2310,6 +2377,7 @@ $("mk-sim").addEventListener("click",()=>setMarket("sim"));
 fillTickers();
 for(const [id,key] of [["pick-overlay","overlay"],["pick-panel","panel"]]){const sel=$(id);sel.value=STUDY_PREF[key]||"";
   sel.addEventListener("change",()=>{STUDY_PREF[key]=sel.value;try{localStorage.setItem("org.studies",JSON.stringify(STUDY_PREF))}catch(e){}drawChart()})}
+$("tour-again").addEventListener("click",()=>{if(Store.player)startWelcomeTour()});
 document.querySelectorAll(".legend .lg[data-g]").forEach(b=>b.addEventListener("click",()=>openGlossary(b.dataset.g)));
 
 function renderAll(){renderFacts();renderTicket();drawChart()}
@@ -2327,7 +2395,7 @@ function renderAll(){renderFacts();renderTicket();drawChart()}
   else try{DATA=await (await fetch("data.json")).json()}catch(e){$("ticket").replaceChildren(el("p",{text:"Could not load the market data file. Reload the page to try again."}));return}
   buildIndex();renderLessons();
   Store.player=Store.blank();renderMe();newDay();
-  await Store.init();renderMe();
+  await Store.init();renderMe();tourMaybeStart();
   try{if(window.claude&&claude.use){SAMPLE=await claude.use("sample")}}catch(e){SAMPLE=null}
 })();
 </script>
