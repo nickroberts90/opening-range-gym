@@ -223,7 +223,7 @@ tbody tr.clickable{cursor:pointer} tbody tr.clickable:hover{background:var(--acc
 
 <header>
   <div class="bar">
-    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v5.1</span></div>
+    <div class="brand"><i aria-hidden="true"></i>Opening Range Gym <span class="ver">v5.2</span></div>
     <nav aria-label="Sections">
       <button id="nav-train" data-view="train" aria-current="page">Train</button>
       <button id="nav-challenge" data-view="challenge">Challenge</button>
@@ -1779,13 +1779,13 @@ const LTRACK_DESC={playbook:"The opening range rules this gym is built on, with 
   options:"How same-day option prices move: strikes, delta, time decay, volatility and spreads.",
   risk:"Planning, exits, sizing, and the habits and biases that decide results.",
   glossary:"Common terms in plain words. Each one links to the lesson that covers it."};
-const LX={view:"track",track:"playbook",lesson:null,q:""};
+const LX={view:"track",track:"foundations",lesson:null,q:""};
 let LTRACKS=[],LESSON_BY_ID={};
 const CS_BASE="https://chartschool.stockcharts.com/table-of-contents/";
 const gslug=t=>t.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 function initLessons(){
   const pb=lessonList().map((x,k)=>({id:CONTENT.pb[k],title:x.t,pb:true,tag:x.tag,sim:x.sim}));
-  LTRACKS=[{id:"playbook",name:"Playbook",lessons:pb},...CONTENT.tracks];
+  LTRACKS=[...CONTENT.tracks,{id:"playbook",name:"Playbook",lessons:pb}];
   LESSON_BY_ID={};for(const t of LTRACKS)t.lessons.forEach((l,k)=>{LESSON_BY_ID[l.id]={...l,track:t.id,trackName:t.name,k,n:t.lessons.length}});
 }
 function renderLessons(){initLessons();renderLX()}
